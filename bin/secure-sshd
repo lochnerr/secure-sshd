@@ -288,6 +288,11 @@ secure_sshd() {
   # Test the configuration.
   /usr/sbin/sshd -t || :
 
+  # Enable google authenticator, if needed.
+  if $(dirname $0)/enable-authenticator-if-needed ; then
+    log "Info: Google authenticator enabled!"
+  fi
+
   # Determine if running under init system (systemd or openRC).
   INITPROC="$(ps aux | grep 'root.*[ ]1[ ]' || : )"
   [ -z "$INITPROC" ] && INITPROC="$(ps aux | grep '[ ]*[ ]1[ ]*root' || : )"
