@@ -314,6 +314,11 @@ secure_sshd() {
   echo "$0 Done!"
 }
 
+if [ "$(id -u)" != "0" ]; then
+  echo "Must be root!"
+  exit 1
+fi
+
 secure_sshd
 
 exit 0
