@@ -1,0 +1,88 @@
+#!/bin/sh
+
+# Function to enable google authenticator.
+
+LOG="/var/log/authenticator.log"
+
+log() {
+  echo "$(date +%H:%M:%S) $1" >>$LOG
+  logger -t bootstrap "$1" || :
+}
+
+enable_google_authenticator() {
+
+  if [ ! -e /etc/pam.d/sshd ]; then
+    log "Warning: File /etc/pam.d/sshd does not exist, not enabling google authenticator."
+    return
+  fi
+
+  if [ ! -d /etc/ssh/sshd_config.d ]; then
+    log "Warning: Directory /etc/ssh/sshd_config.d does not exist, not enabling google authenticator."
+    return
+  fi
+
+  if [ ! -e /etc/ssh/90-2fa.tmpl ]; then
+    log "Info: Creating file /etc/ssh/90-2fa.tmpl."
+    cat >/etc/ssh/90-2fa.tmpl <<-__EOF__
+	# Public key plus Google Authenticator configuration.
+	# This works on both Fedora 34 and ubuntu 20.04.
+	PasswordAuthentication yes
+	KbdInteractiveAuthentication yes
+	ChallengeResponseAuthentication yes
+	AuthenticationMethods publickey,password publickey,keyboard-interactive
+	__EOF__
+  fi
+
+  log "Adding google_authenticator configuration to /etc/ssh/sshd_config.d/90-2fa.conf."
+  rm -f /etc/ssh/sshd_config.d/90-2fa.conf
+  ln -s /etc/ssh/90-2fa.tmpl /etc/ssh/sshd_config.d/90-2fa.conf
+
+  if [ ! -e /etc/pam-sshd.bak ]; then
+    log "Backing up /etc/pam.d/sshd to /etc/pam-sshd.bak."
+    cp -p /etc/pam.d/sshd /etc/pam-sshd.bak
+  fi
+
+  # Restore the original pam sshd configuration.
+  cp -p /etc/pam-sshd.bak /etc/pam.d/sshd
+
+  # Fixup the pam sshd configuration for google authenticator.
+  sed -i \
+    -e '/^@include.*common-auth/ d' \
+    -e 's/^auth.*substack.*password-auth/#auth       substack     password-auth/' \
+    /etc/pam.d/sshd
+
+  # Only add google authenticator entry if it's not already set.
+  if ! grep "pam_google_authenticator\.so" /etc/pam.d/sshd >/dev/null 2>&1 ; then
+    cat >>/etc/pam.d/sshd <<-__EOF__
+	# Two-factor authentication.
+	auth sufficient pam_google_authenticator.so secret=/home/\${USER}/.ssh/.google_authenticator nullok
+	__EOF__
+  fi
+
+  log "Changes to pam sshd configuration."
+  msg="$(diff /etc/pam-sshd.bak /etc/pam.d/sshd  || :)"
+  log "$msg"
+}
+
+# If a .google_authenticator file is in any users home or home/.ssh directory,
+# enable  2-factor authentication.
+AUTHENTICATOR="false"
+for user in $(ls /home) ; do
+  [ -e "/home/${user}/.google_authenticator"      ] && AUTHENTICATOR="true"
+  [ -e "/home/${user}/.ssh/.google_authenticator" ] && AUTHENTICATOR="true"
+done
+
+rc="1"
+if [ "$AUTHENTICATOR" = "true" ]; then
+  log "Enabling 2-factor authentication."
+  enable_google_authenticator
+  rc="0"
+else
+  # Disable 2-factor authentication.
+  if [ -L /etc/ssh/sshd_config.d/90-2fa.conf ]; then
+    log "Removing symbolic link /etc/ssh/sshd_config.d/90-2fa.conf."
+    rm /etc/ssh/sshd_config.d/90-2fa.conf
+  fi
+fi
+
+exit $rc

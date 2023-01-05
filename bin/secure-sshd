@@ -1,0 +1,315 @@
+#!/bin/sh
+
+# See: https://github.com/jtesta/ssh-audit
+# git clone https://github.com/jtesta/ssh-audit.git
+
+set -e
+
+# Set default security values.
+KexAlgorithms='curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha256'
+Ciphers='chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr'
+MACs='hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,umac-128-etm@openssh.com'
+
+# These only apply to newer versions of sshd.
+GSSAPIKexAlgorithms='gss-curve25519-sha256-'
+HostKeyAlgorithms='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-512'
+PubkeyAcceptedKeyTypes='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-512'
+CASignatureAlgorithms='ssh-ed25519,rsa-sha2-256,rsa-sha2-512'
+
+older_sshd() {
+
+  GSSAPIKexAlgorithms=
+  HostKeyAlgorithms=
+  PubkeyAcceptedKeyTypes=
+}
+
+. /etc/os-release
+
+ID_RELATIVE="$ID"
+[ "$ID" = "centos" ] && ID_FLAVOR="rhel"
+# Note: All tests run circa June 2021.
+if [ "$ID_RELATIVE" = "ubuntu" ]; then
+  # Tested with releases starting with 14.04.
+  if [ "$VERSION_ID" \< "14" ]; then
+    echo "Error: Unsupported $ID Version ${VERSION_ID}."
+    exit 1
+  fi
+  if [ "$VERSION_ID" \> "22" ]; then
+    # 22.xx +
+    KexAlgorithms='sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,gss-curve25519-sha256-,diffie-hellman-group16-sha512,gss-group16-sha512-,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha256'
+    HostKeyAlgorithms='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-256-cert-v01@openssh.com'
+  elif [ "$VERSION_ID" \> "20" ]; then
+    # 20.xx +
+    HostKeyAlgorithms='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com'
+  elif [ "$VERSION_ID" \> "18" ]; then
+    # 18.04 Has open CVE-2018-15473.
+    older_sshd
+    KexAlgorithms='curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha256'
+    HostKeyAlgorithms='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com'
+  else
+    # 14.04 Has weak HostKey ssh-rsa and open CVEs: CVE-2018-15473, CVE-2016-3115, CVE-2016-1907, CVE-2015-8325, CVE-2015-6564, CVE-2015-6563.
+    # 16.04 Has weak HostKey ssh-rsa and open CVEs: CVE-2018-15473, CVE-2016-6515, CVE-2015-8325.
+    older_sshd
+    KexAlgorithms='curve25519-sha256@libssh.org,diffie-hellman-group-exchange-sha256'
+  fi
+elif [ "$ID_RELATIVE" = "rhel" ]; then
+  if [ "$VERSION_ID" \< "7" ]; then
+    echo "Error: Unsupported $ID Version ${VERSION_ID}."
+    exit 1
+  fi
+  if [ "$VERSION_ID" \< "8" ]; then
+    # 7
+    older_sshd
+    KexAlgorithms='curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group18-sha512,diffie-hellman-group16-sha512,diffie-hellman-group-exchange-sha256'
+  else
+    # 8+
+    true
+  fi
+elif [ "$ID_RELATIVE" = "fedora" ]; then
+  # Tested with releases starting with 30.
+  if [ "$VERSION_ID" \< "30" ]; then
+    echo "Error: Unsupported $ID Version ${VERSION_ID}."
+    exit 1
+  fi
+elif [ "$ID_RELATIVE" = "alpine" ]; then
+  # Tested with releases starting with 3.9.0.
+  GSSAPIKexAlgorithms=
+elif [ "$ID_RELATIVE" = "amzn" ]; then
+  # Tested with releases starting with Amazon Linux 2.
+  if [ "$VERSION_ID" \< "2" ]; then
+    echo "Error: Unsupported $ID Version ${VERSION_ID}."
+    exit 1
+  fi
+  GSSAPIKexAlgorithms=
+else
+  # Try newer configuration on unknown distros.
+  true
+fi
+
+set_banner() {
+
+  if [ -z "${ENTITY}" ]; then
+    echo "Warning: No ENTITY value set, skipping banner."
+  else
+    echo "Info: Setting SSH Banner."
+    cat >$SSH_DIR/logon_banner <<-EOD
+
+	#######################################################################################################################
+	# All communications and data transiting, traveling to or from, or stored on this system will be monitored. You
+	# consent to the unrestricted monitoring, interception, recording, and searching of all communications and
+	# data transiting, traveling to or from, or stored on this system at any time and for any purpose by
+	# ${ENTITY} and by any person or entity, including government entities, authorized by
+	# ${ENTITY}. You also consent to the unrestricted disclosure of all communications and data
+	# transiting, traveling to or from, or stored on this system at any time and for any purpose to any person or entity,
+	# including government entities, authorized by ${ENTITY}. You are acknowledging that you have no
+	# reasonable expectation of privacy regarding your use of this system. These acknowledgments and consents cover
+	# all use of the system, including work-related use and personal use without exception.
+	#######################################################################################################################
+
+	EOD
+    sed -i "s:#Banner.*:Banner $SSH_DIR/logon_banner:" $1
+  fi
+}
+
+secure_sshd() {
+
+  # Secure sshd configuration.
+
+  ENTITY="Clone Research Corporation"
+  SSH_DIR="/etc/ssh"
+  CFILE="${SSH_DIR}/sshd_config"
+  CRYPTO="/etc/crypto-policies/back-ends/opensshserver.config"
+
+  # Save original config file.
+  if [ ! -e ${CFILE}.bak ]; then
+    echo "Info: Backing up original ${CFILE} file."
+    cp -p ${CFILE} ${CFILE}.bak
+  else
+    # Start with the original baseline.
+    echo "Info: Using original ${CFILE} file as baseline."
+    cp -p ${CFILE}.bak ${CFILE}
+  fi
+
+  # Save the original crypto policies file.
+  if [ ! -e ${CRYPTO}.bak ] && [ -e ${CRYPTO} ]; then
+    cp -P $CRYPTO ${CRYPTO}.bak
+  fi
+
+  # Remove weak host files.
+  rm -f ${SSH_DIR}/ssh_host_dsa_key*
+  rm -f ${SSH_DIR}/ssh_host_ecdsa_key*
+
+  # Generate a strong rsa key, if needed.
+  if [ ! -e ${SSH_DIR}/ssh_host_rsa_key ]; then
+    echo "Info: Generating strong RSA key."
+    ssh-keygen -t rsa -b 4096 -f ${SSH_DIR}/ssh_host_rsa_key -N ""
+  elif [ "$(ssh-keygen -l -f ${SSH_DIR}/ssh_host_rsa_key | awk '$1 < 4096')" ]; then
+    echo "Info: Replacing weak RSA key."
+    rm -f ${SSH_DIR}/ssh_host_rsa_key*
+    ssh-keygen -t rsa -b 4096 -f ${SSH_DIR}/ssh_host_rsa_key -N ""
+  else
+    echo "Info: Keeping existing RSA key >= 4096 bits."
+  fi
+  
+  # Generate a ed25519 key, if needed.
+  if [ ! -e ${SSH_DIR}/ssh_host_ed25519_key ]; then
+    ssh-keygen -t ed25519 -f ${SSH_DIR}/ssh_host_ed25519_key -N ""
+  fi
+
+  # Update the group ownership and permissions for the keys.
+  if grep ssh_keys /etc/group >/dev/null 2>&1 ; then
+    echo "Info: Updating group ownership and permissions for keys."
+    chgrp ssh_keys ${SSH_DIR}/ssh_host_ed25519_key ${SSH_DIR}/ssh_host_rsa_key
+    chmod g+r ${SSH_DIR}/ssh_host_ed25519_key ${SSH_DIR}/ssh_host_rsa_key
+  else
+    echo "Info: Not updating group ownership and permissions for keys."
+  fi
+
+  # Alpine does not install moduli file when runnong in container.
+  if [ ! -e ${SSH_DIR}/moduli ]; then
+    if [ -e $(pwd)/test-moduli ]; then
+      echo "Info: Creating link to test moduli file."
+      ln -sf $(pwd)/test-moduli ${SSH_DIR}/moduli 
+    fi
+  fi
+
+  # Clear weak moduli.
+  if [ ! -e ${SSH_DIR}/moduli.bak ]; then
+    echo "Info: Backing up ${SSH_DIR}/moduli file."
+    cp -p ${SSH_DIR}/moduli ${SSH_DIR}/moduli.bak
+  fi
+  echo "Info: Removing weak moduli entries."
+  awk '$5 >= 3071' ${SSH_DIR}/moduli.bak > ${SSH_DIR}/moduli
+  BEG="$(wc -l ${SSH_DIR}/moduli.bak | cut -d ' ' -f 1)"
+  END="$(wc -l ${SSH_DIR}/moduli     | cut -d ' ' -f 1)"
+  echo "Info: Removed $(( $BEG - $END )) weak entries."
+
+  if [ ! -e ${CRYPTO} ]; then
+    echo "Info: Securing the SSHD config."
+    cat >/tmp/80-ssh-audit_hardening.conf <<-__EOD__
+
+	# Restrict key exchange, cipher, and MAC algorithms, as per sshaudit.com
+	# hardening guide for $ID ${VERSION_ID}.
+	KexAlgorithms ${KexAlgorithms}
+	Ciphers ${Ciphers}
+	MACs ${MACs}
+	__EOD__
+
+    [ -n "$HostKeyAlgorithms" ]      && echo "HostKeyAlgorithms ${HostKeyAlgorithms}"            >>/tmp/80-ssh-audit_hardening.conf
+    [ -n "$PubkeyAcceptedKeyTypes" ] && echo "PubkeyAcceptedKeyTypes ${PubkeyAcceptedKeyTypes}"  >>/tmp/80-ssh-audit_hardening.conf
+    [ -n "$GSSAPIKexAlgorithms" ]    && echo "GSSAPIKexAlgorithms ${GSSAPIKexAlgorithms}"        >>/tmp/80-ssh-audit_hardening.conf
+  else
+    # Secure the configuration.
+    echo "Info: Securing the CRYPTO_POLICY."
+    # Previous crypto-policies were version 20191128.
+    # Support for crypto-policies, version 20200610.
+    if ! grep -i CRYPTO_POLICY /usr/share/crypto-policies/DEFAULT/opensshserver.txt >/dev/null 2>&1 ; then
+      # Format starting with Fedora 32.
+      cat >${SSH_DIR}/sshd-crypto-policy.txt <<-__EOF__
+	# Restrict key exchange, cipher, and MAC algorithms, as per sshaudit.com
+	# hardening guide for $ID ${VERSION_ID}.
+	Ciphers ${Ciphers}
+	MACs ${MACs}
+	GSSAPIKexAlgorithms ${GSSAPIKexAlgorithms}
+	KexAlgorithms ${KexAlgorithms}
+	HostKeyAlgorithms ${HostKeyAlgorithms}
+	PubkeyAcceptedKeyTypes ${PubkeyAcceptedKeyTypes}
+	CASignatureAlgorithms ${CASignatureAlgorithms}
+	__EOF__
+    else
+      # Format prior to Fedora 32.
+      echo "CRYPTO_POLICY='-oCiphers=${Ciphers} -oMACs=${MACs} -oGSSAPIKexAlgorithms=${GSSAPIKexAlgorithms} -oKexAlgorithms=${KexAlgorithms} -oHostKeyAlgorithms=${HostKeyAlgorithms} -oPubkeyAcceptedKeyTypes=${PubkeyAcceptedKeyTypes} -oCASignatureAlgorithms=${CASignatureAlgorithms}'" >${SSH_DIR}/sshd-crypto-policy.txt
+    fi
+    ln -sf ${SSH_DIR}/sshd-crypto-policy.txt ${CRYPTO}
+    diff ${CRYPTO}.bak ${SSH_DIR}/sshd-crypto-policy.txt || :
+  fi
+
+  # Debian
+  SFTP="/usr/lib/openssh/sftp-server"
+  # Fedora
+  [ -e /usr/libexec/openssh/sftp-server ] && SFTP="/usr/libexec/openssh/sftp-server"
+  # Alpine
+  [ -e /usr/lib/ssh/sftp-server ] && SFTP="/usr/lib/ssh/sftp-server"
+
+  if [ -d ${SSH_DIR}/sshd_config.d ]; then
+
+    echo "Info: Adding additional settings to 80-ssh-audit_hardening.conf file."
+    cat >>/tmp/80-ssh-audit_hardening.conf <<-__EOD__
+
+	LogLevel VERBOSE
+	PermitRootLogin forced-commands-only
+	PrintLastLog yes
+	#Subsystem sftp	$SFTP
+	HostKey ${SSH_DIR}/ssh_host_rsa_key
+	HostKey ${SSH_DIR}/ssh_host_ed25519_key
+	#Banner none
+	__EOD__
+
+    if grep '^[[:space:]]*Subsystem.*sftp' $CFILE >/dev/null 2>&1 ; then
+      echo "Info: Subsystem sftp already active in $CFILE file."
+    else
+      echo "Info: Enabling subsystem sftp in 80-ssh-audit_hardening.conf."
+      sed -i -e 's/#Subsystem/Subsystem/' /tmp/80-ssh-audit_hardening.conf
+    fi
+
+    echo "Info: Adding 80-ssh-audit_hardening.conf to ${SSH_DIR}/sshd_config.d/ directory."
+    set_banner /tmp/80-ssh-audit_hardening.conf
+    # The following previously was a mv, but it messed up SELinux context.
+    cp /tmp/80-ssh-audit_hardening.conf ${SSH_DIR}/sshd_config.d/80-ssh-audit_hardening.conf
+    cat ${SSH_DIR}/sshd_config.d/80-ssh-audit_hardening.conf
+  else
+    # Otherwise, the changes will be made inline to the sshd_config file.
+    if [ ! -e ${SSH_DIR}/sshd_config.bak ]; then
+      echo "Info: Creating ${SSH_DIR}/sshd_config.bak file."
+      cp -p ${SSH_DIR}/sshd_config ${SSH_DIR}/sshd_config.bak
+    fi
+    sed -i \
+     -e 's/^[[:space:]]*#*[[:space:]]*LogLevel.*/LogLevel VERBOSE/' \
+     -e 's/^[[:space:]]*#*[[:space:]]*PermitRootLogin.*/PermitRootLogin forced-commands-only/' \
+     -e "s:^[[:space:]]*#*[[:space:]]*Subsystem[[:space:]]*sftp.*:Subsystem sftp\t$SFTP:" \
+     -e 's/^[[:space:]]*HostKey/#HostKey/g' \
+     $CFILE || :
+    echo "HostKey ${SSH_DIR}/ssh_host_rsa_key" >>$CFILE
+    echo "HostKey ${SSH_DIR}/ssh_host_ed25519_key" >>$CFILE
+
+    if [ -e /tmp/80-ssh-audit_hardening.conf ]; then
+      echo "Info: Updating ${SSH_DIR}/sshd_config file with algorithm settings."
+      cat /tmp/80-ssh-audit_hardening.conf >>${SSH_DIR}/sshd_config
+      set_banner ${SSH_DIR}/sshd_config
+    fi
+  fi
+
+  # Show the changes to the config.
+  diff ${CFILE}.bak ${CFILE} || :
+
+  # Create run directory.  Needed for container testing.
+  mkdir -p /run/sshd
+
+  # Test the configuration.
+  /usr/sbin/sshd -t || :
+
+  # Determine if running under init system (systemd or openRC).
+  INITPROC="$(ps aux | grep 'root.*[ ]1[ ]' || : )"
+  [ -z "$INITPROC" ] && INITPROC="$(ps aux | grep '[ ]*[ ]1[ ]*root' || : )"
+  SYSINIT="false"
+  [ -n "$(echo $INITPROC | grep /sbin/init || : )" ] && SYSINIT="true"
+  [ -n "$(echo $INITPROC | grep /lib/systemd/systemd || : )" ] && SYSINIT="true"
+  if [ "$SYSINIT" = "true" ]; then
+    if [ ! -x /sbin/apk ]; then
+      # Restart the ssh daemon.
+      systemctl restart sshd.service
+    else
+      /etc/init.d/sshd restart
+    fi
+  else
+    echo "Warning: Not restarting sshd daemon (No init system)."
+    # This will happen in a live-xen build.  It is executed in an anaconda kickstart.
+  fi
+
+  echo "$0 Done!"
+}
+
+secure_sshd
+
+exit 0
+
