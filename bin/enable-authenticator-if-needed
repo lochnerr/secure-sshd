@@ -21,6 +21,16 @@ enable_google_authenticator() {
     return
   fi
 
+  if ! command -v google-authenticator >/dev/null 2>&1 ; then
+    . /etc/os-release
+    if [ "$ID" = "fedora" ]; then
+      dnf install -y google-authenticator
+    else
+      log "Warning: google-authenticator is not installed, not enabling google authenticator."
+      return
+    fi
+  fi
+
   if [ ! -e /etc/ssh/90-2fa.tmpl ]; then
     log "Info: Creating file /etc/ssh/90-2fa.tmpl."
     cat >/etc/ssh/90-2fa.tmpl <<-__EOF__
