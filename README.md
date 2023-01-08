@@ -1,2 +1,2 @@
 # secure-sshd
-Scripts to secure ssh server configuration.
+Scripts to secure an ssh server.
