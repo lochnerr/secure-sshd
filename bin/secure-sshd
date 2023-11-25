@@ -160,7 +160,7 @@ secure_sshd() {
   if grep ssh_keys /etc/group >/dev/null 2>&1 ; then
     echo "Info: Updating group ownership and permissions for keys."
     chgrp ssh_keys ${SSH_DIR}/ssh_host_ed25519_key ${SSH_DIR}/ssh_host_rsa_key
-    chmod g+r ${SSH_DIR}/ssh_host_ed25519_key ${SSH_DIR}/ssh_host_rsa_key
+    chmod 600 ${SSH_DIR}/ssh_host_ed25519_key ${SSH_DIR}/ssh_host_rsa_key
   else
     echo "Info: Not updating group ownership and permissions for keys."
   fi
