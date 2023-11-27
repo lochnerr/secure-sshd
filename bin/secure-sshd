@@ -16,6 +16,14 @@ HostKeyAlgorithms='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa
 PubkeyAcceptedKeyTypes='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-512'
 CASignatureAlgorithms='ssh-ed25519,rsa-sha2-256,rsa-sha2-512'
 
+# New in Fedora 38 circa 04/18/2023.  No ssh-audit recommendation as of 11/27/2023.
+# TODO Update when recommendations become available.
+#
+# Apparently existed in OpenSSH since 6.6, renamed in 8.5!
+# OpenSSH 8.5/8.5p1 (2021-03-03): rename HostbasedKeyTypes (ssh) and HostbasedAcceptedKeyTypes (sshd) to HostbasedAcceptedAlgorithms.
+# OpenSSH 6.8/6.8p1 (2015-03-18): add sshd_config HostbasedAcceptedKeyTypes and PubkeyAcceptedKeyTypes options.
+HostbasedAcceptedAlgorithms='ecdsa-sha2-nistp256,ecdsa-sha2-nistp256-cert-v01@openssh.com,sk-ecdsa-sha2-nistp256@openssh.com,sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521,ecdsa-sha2-nistp521-cert-v01@openssh.com,ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-512-cert-v01@openssh.com'
+
 older_sshd() {
 
   GSSAPIKexAlgorithms=
