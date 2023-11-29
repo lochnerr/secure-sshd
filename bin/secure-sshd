@@ -11,18 +11,12 @@ Ciphers='chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh
 MACs='hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,umac-128-etm@openssh.com'
 
 # These only apply to newer versions of sshd.
-GSSAPIKexAlgorithms='gss-curve25519-sha256-'
+GSSAPIKexAlgorithms='gss-curve25519-sha256-,gss-group16-sha512-'
 HostKeyAlgorithms='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-512'
 PubkeyAcceptedKeyTypes='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-512'
-CASignatureAlgorithms='ssh-ed25519,rsa-sha2-256,rsa-sha2-512'
-
-# New in Fedora 38 circa 04/18/2023.  No ssh-audit recommendation as of 11/27/2023.
-# TODO Update when recommendations become available.
-#
-# Apparently existed in OpenSSH since 6.6, renamed in 8.5!
-# OpenSSH 8.5/8.5p1 (2021-03-03): rename HostbasedKeyTypes (ssh) and HostbasedAcceptedKeyTypes (sshd) to HostbasedAcceptedAlgorithms.
-# OpenSSH 6.8/6.8p1 (2015-03-18): add sshd_config HostbasedAcceptedKeyTypes and PubkeyAcceptedKeyTypes options.
-HostbasedAcceptedAlgorithms='ecdsa-sha2-nistp256,ecdsa-sha2-nistp256-cert-v01@openssh.com,sk-ecdsa-sha2-nistp256@openssh.com,sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521,ecdsa-sha2-nistp521-cert-v01@openssh.com,ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-512-cert-v01@openssh.com'
+CASignatureAlgorithms='sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512,rsa-sha2-256'
+HostbasedAcceptedAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-256'
+PubkeyAcceptedAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-256'
 
 older_sshd() {
 
@@ -42,10 +36,15 @@ if [ "$ID_RELATIVE" = "ubuntu" ]; then
     echo "Error: Unsupported $ID Version ${VERSION_ID}."
     exit 1
   fi
+  if [ ! "$VERSION_ID" \> "22" ]; then
+    # These ssh-audit recommendations are only for 22.04 and later.
+    HostbasedAcceptedAlgorithms=
+    PubkeyAcceptedAlgorithms=
+  fi
   if [ "$VERSION_ID" \> "22" ]; then
     # 22.xx +
     KexAlgorithms='sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,gss-curve25519-sha256-,diffie-hellman-group16-sha512,gss-group16-sha512-,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha256'
-    HostKeyAlgorithms='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-256-cert-v01@openssh.com'
+    HostKeyAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512,rsa-sha2-256'
   elif [ "$VERSION_ID" \> "20" ]; then
     # 20.xx +
     HostKeyAlgorithms='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com'
@@ -78,6 +77,12 @@ elif [ "$ID_RELATIVE" = "fedora" ]; then
   if [ "$VERSION_ID" \< "30" ]; then
     echo "Error: Unsupported $ID Version ${VERSION_ID}."
     exit 1
+  else
+    # These are supported by Fedora releases starting with at least 36.
+    KexAlgorithms='sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,gss-curve25519-sha256-,diffie-hellman-group16-sha512,gss-group16-sha512-,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha256'
+    HostKeyAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512,rsa-sha2-256'
+    HostbasedAcceptedAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-256'
+    PubkeyAcceptedAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-256'
   fi
 elif [ "$ID_RELATIVE" = "alpine" ]; then
   # Tested with releases starting with 3.9.0.
@@ -182,7 +187,11 @@ secure_sshd() {
   fi
 
   # Clear weak moduli.
-  if [ ! -e ${SSH_DIR}/moduli.bak ]; then
+  if [ -e ${SSH_DIR}/moduli.rpmnew ]; then
+    # A fedora/redhat update provided a new moduli file.
+    echo "Info: Backing up ${SSH_DIR}/moduli.rpmnew file."
+    mv -f ${SSH_DIR}/moduli.rpmnew ${SSH_DIR}/moduli.bak
+  elif [ ! -e ${SSH_DIR}/moduli.bak ]; then
     echo "Info: Backing up ${SSH_DIR}/moduli file."
     cp -p ${SSH_DIR}/moduli ${SSH_DIR}/moduli.bak
   fi
@@ -221,7 +230,7 @@ secure_sshd() {
 	GSSAPIKexAlgorithms ${GSSAPIKexAlgorithms}
 	KexAlgorithms ${KexAlgorithms}
 	HostKeyAlgorithms ${HostKeyAlgorithms}
-	PubkeyAcceptedKeyTypes ${PubkeyAcceptedKeyTypes}
+	PubkeyAcceptedAlgorithms ${PubkeyAcceptedAlgorithms}
 	CASignatureAlgorithms ${CASignatureAlgorithms}
 	__EOF__
     else
@@ -302,8 +311,10 @@ secure_sshd() {
   fi
 
   # Determine if running under init system (systemd or openRC).
-  INITPROC="$(ps aux | grep 'root.*[ ]1[ ]' || : )"
-  [ -z "$INITPROC" ] && INITPROC="$(ps aux | grep '[ ]*[ ]1[ ]*root' || : )"
+  if command -v ps >/dev/null 2>&1 ; then
+    INITPROC="$(ps aux | grep 'root.*[ ]1[ ]' || : )"
+    [ -z "$INITPROC" ] && INITPROC="$(ps aux | grep '[ ]*[ ]1[ ]*root' || : )"
+  fi
   SYSINIT="false"
   [ -n "$(echo $INITPROC | grep /sbin/init || : )" ] && SYSINIT="true"
   [ -n "$(echo $INITPROC | grep /lib/systemd/systemd || : )" ] && SYSINIT="true"
