@@ -11,10 +11,9 @@ Ciphers='chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh
 MACs='hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,umac-128-etm@openssh.com'
 
 # These only apply to newer versions of sshd.
-GSSAPIKexAlgorithms='gss-curve25519-sha256-,gss-group16-sha512-'
 HostKeyAlgorithms='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-512'
-PubkeyAcceptedKeyTypes='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-512'
 CASignatureAlgorithms='sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512,rsa-sha2-256'
+GSSAPIKexAlgorithms='gss-curve25519-sha256-,gss-group16-sha512-'
 HostbasedAcceptedAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-256'
 PubkeyAcceptedAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-256'
 
@@ -22,7 +21,6 @@ older_sshd() {
 
   GSSAPIKexAlgorithms=
   HostKeyAlgorithms=
-  PubkeyAcceptedKeyTypes=
 }
 
 . /etc/os-release
@@ -31,35 +29,34 @@ ID_RELATIVE="$ID"
 [ "$ID" = "centos" ] && ID_FLAVOR="rhel"
 # Note: All tests run circa June 2021.
 if [ "$ID_RELATIVE" = "ubuntu" ]; then
-  # Tested with releases starting with 14.04.
-  if [ "$VERSION_ID" \< "14" ]; then
+  # Start with values for server 18.04.
+  KexAlgorithms='curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha256'
+  Ciphers='chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr'
+  MACs='hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,umac-128-etm@openssh.com'
+  HostKeyAlgorithms='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com'
+  CASignatureAlgorithms=
+  GSSAPIKexAlgorithms=
+  HostbasedAcceptedAlgorithms=
+  PubkeyAcceptedAlgorithms=
+  if [ "$VERSION_ID" \> "20" ]; then
+    # Add changes from 18 to 20.
+    HostKeyAlgorithms='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com'
+  fi
+  if [ "$VERSION_ID" \> "22" ]; then
+    # Add changes from 20 to 22.
+    HostKeyAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512,rsa-sha2-256'
+    CASignatureAlgorithms='sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512,rsa-sha2-256'
+    GSSAPIKexAlgorithms='gss-curve25519-sha256-,gss-group16-sha512-'
+    HostbasedAcceptedAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-256'
+    PubkeyAcceptedAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-256'
+  fi
+  # Only releases starting with 18.04 supported.
+  if [ "$VERSION_ID" \< "18" ]; then
     echo "Error: Unsupported $ID Version ${VERSION_ID}."
     exit 1
   fi
-  if [ ! "$VERSION_ID" \> "22" ]; then
-    # These ssh-audit recommendations are only for 22.04 and later.
-    HostbasedAcceptedAlgorithms=
-    PubkeyAcceptedAlgorithms=
-  fi
-  if [ "$VERSION_ID" \> "22" ]; then
-    # 22.xx +
-    KexAlgorithms='sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,gss-curve25519-sha256-,diffie-hellman-group16-sha512,gss-group16-sha512-,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha256'
-    HostKeyAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512,rsa-sha2-256'
-  elif [ "$VERSION_ID" \> "20" ]; then
-    # 20.xx +
-    HostKeyAlgorithms='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com'
-  elif [ "$VERSION_ID" \> "18" ]; then
-    # 18.04 Has open CVE-2018-15473.
-    older_sshd
-    KexAlgorithms='curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha256'
-    HostKeyAlgorithms='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com'
-  else
-    # 14.04 Has weak HostKey ssh-rsa and open CVEs: CVE-2018-15473, CVE-2016-3115, CVE-2016-1907, CVE-2015-8325, CVE-2015-6564, CVE-2015-6563.
-    # 16.04 Has weak HostKey ssh-rsa and open CVEs: CVE-2018-15473, CVE-2016-6515, CVE-2015-8325.
-    older_sshd
-    KexAlgorithms='curve25519-sha256@libssh.org,diffie-hellman-group-exchange-sha256'
-  fi
 elif [ "$ID_RELATIVE" = "rhel" ]; then
+  # Not recently tested with rhel.
   if [ "$VERSION_ID" \< "7" ]; then
     echo "Error: Unsupported $ID Version ${VERSION_ID}."
     exit 1
@@ -88,12 +85,25 @@ elif [ "$ID_RELATIVE" = "alpine" ]; then
   # Tested with releases starting with 3.9.0.
   GSSAPIKexAlgorithms=
 elif [ "$ID_RELATIVE" = "amzn" ]; then
+  # These are current as of 11/30/2023.
+  KexAlgorithms='sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,gss-curve25519-sha256-,diffie-hellman-group16-sha512,gss-group16-sha512-,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha256'
+  Ciphers='chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr'
+  MACs='hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,umac-128-etm@openssh.com'
+  HostKeyAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512,rsa-sha2-256'
+  CASignatureAlgorithms='sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512,rsa-sha2-256'
+  GSSAPIKexAlgorithms='gss-curve25519-sha256-,gss-group16-sha512-'
+  HostbasedAcceptedAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-256'
+  PubkeyAcceptedAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512,rsa-sha2-256'
+  if [ "$VERSION" -ge 2023 ]; then
+    # 2023 works with the above settings.
+    echo "Amazon Linux 2023+."
+    :
+  fi
   # Tested with releases starting with Amazon Linux 2.
-  if [ "$VERSION_ID" \< "2" ]; then
+  if [ "$VERSION_ID" -lt 2023 ]; then
     echo "Error: Unsupported $ID Version ${VERSION_ID}."
     exit 1
   fi
-  GSSAPIKexAlgorithms=
 else
   # Try newer configuration on unknown distros.
   true
@@ -146,6 +156,10 @@ secure_sshd() {
   # Save the original crypto policies file.
   if [ ! -e ${CRYPTO}.bak ] && [ -e ${CRYPTO} ]; then
     cp -P $CRYPTO ${CRYPTO}.bak
+  fi
+  # Save the client crypto policy.
+  if [ ! -e /etc/crypto-policies/back-ends/openssh.config.bak ]; then
+    cp -P /etc/crypto-policies/back-ends/openssh.config /etc/crypto-policies/back-ends/openssh.config.bak
   fi
 
   # Remove weak host files.
@@ -201,6 +215,7 @@ secure_sshd() {
   END="$(wc -l ${SSH_DIR}/moduli     | cut -d ' ' -f 1)"
   echo "Info: Removed $(( $BEG - $END )) weak entries."
 
+  rm -f /tmp/80-ssh-audit_hardening.conf
   if [ ! -e ${CRYPTO} ]; then
     echo "Info: Securing the SSHD config."
     cat >/tmp/80-ssh-audit_hardening.conf <<-__EOD__
@@ -211,10 +226,11 @@ secure_sshd() {
 	Ciphers ${Ciphers}
 	MACs ${MACs}
 	__EOD__
-
-    [ -n "$HostKeyAlgorithms" ]      && echo "HostKeyAlgorithms ${HostKeyAlgorithms}"            >>/tmp/80-ssh-audit_hardening.conf
-    [ -n "$PubkeyAcceptedKeyTypes" ] && echo "PubkeyAcceptedKeyTypes ${PubkeyAcceptedKeyTypes}"  >>/tmp/80-ssh-audit_hardening.conf
-    [ -n "$GSSAPIKexAlgorithms" ]    && echo "GSSAPIKexAlgorithms ${GSSAPIKexAlgorithms}"        >>/tmp/80-ssh-audit_hardening.conf
+    [ -n "$HostKeyAlgorithms" ]			&& echo "HostKeyAlgorithms ${HostKeyAlgorithms}"			>>/tmp/80-ssh-audit_hardening.conf
+    [ -n "$CASignatureAlgorithms" ]		&& echo "CASignatureAlgorithms ${CASignatureAlgorithms}"		>>/tmp/80-ssh-audit_hardening.conf
+    [ -n "$GSSAPIKexAlgorithms" ]		&& echo "GSSAPIKexAlgorithms ${GSSAPIKexAlgorithms}"			>>/tmp/80-ssh-audit_hardening.conf
+    [ -n "$HostbasedAcceptedAlgorithms" ]	&& echo "HostbasedAcceptedAlgorithms ${HostbasedAcceptedAlgorithms}"	>>/tmp/80-ssh-audit_hardening.conf
+    [ -n "$PubkeyAcceptedAlgorithms" ]		&& echo "PubkeyAcceptedAlgorithms ${PubkeyAcceptedAlgorithms}"		>>/tmp/80-ssh-audit_hardening.conf
   else
     # Secure the configuration.
     echo "Info: Securing the CRYPTO_POLICY."
@@ -234,20 +250,24 @@ secure_sshd() {
 	CASignatureAlgorithms ${CASignatureAlgorithms}
 	__EOF__
       # Add required size to policy, if supported.
-      [[ "$ID_RELATIVE" = "fedora" && "$VERSION_ID" > "36" ]] && required_size="2048"
+      [[ "$ID_RELATIVE" = "fedora" && "$VERSION_ID" -gt 36 ]] && required_size="2048"
       [ -n "$required_size" ] && echo "RequiredRSASize $required_size" >>${SSH_DIR}/sshd-crypto-policy.txt
       # Fixing up the ssh config is easy. Only need to delete one entry.
       cp ${SSH_DIR}/sshd-crypto-policy.txt ${SSH_DIR}/ssh-crypto-policy.txt
       sed -i '/^HostKeyAlgorithms /d' ${SSH_DIR}/ssh-crypto-policy.txt
       echo "Changes to sshd policy needed for ssh policy:"
       diff ${SSH_DIR}/sshd-crypto-policy.txt ${SSH_DIR}/ssh-crypto-policy.txt || :
-      echo "---"
+      echo "***"
     else
       # Format prior to Fedora 32.
+      PubkeyAcceptedKeyTypes='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-512'
       echo "CRYPTO_POLICY='-oCiphers=${Ciphers} -oMACs=${MACs} -oGSSAPIKexAlgorithms=${GSSAPIKexAlgorithms} -oKexAlgorithms=${KexAlgorithms} -oHostKeyAlgorithms=${HostKeyAlgorithms} -oPubkeyAcceptedKeyTypes=${PubkeyAcceptedKeyTypes} -oCASignatureAlgorithms=${CASignatureAlgorithms}'" >${SSH_DIR}/sshd-crypto-policy.txt
     fi
     ln -sf ${SSH_DIR}/sshd-crypto-policy.txt ${CRYPTO}
+    echo "Changes to sshd-crypto-policy.txt:"
     diff ${CRYPTO}.bak ${SSH_DIR}/sshd-crypto-policy.txt || :
+    echo "***"
+    ln -sf ${SSH_DIR}/ssh-crypto-policy.txt /etc/crypto-policies/back-ends/openssh.config
   fi
 
   # Debian
@@ -282,7 +302,9 @@ secure_sshd() {
     set_banner /tmp/80-ssh-audit_hardening.conf
     # The following previously was a mv, but it messed up SELinux context.
     cp /tmp/80-ssh-audit_hardening.conf ${SSH_DIR}/sshd_config.d/80-ssh-audit_hardening.conf
+    echo "Contents of file ${SSH_DIR}/sshd_config.d/80-ssh-audit_hardening.conf:"
     cat ${SSH_DIR}/sshd_config.d/80-ssh-audit_hardening.conf
+    echo "***"
   else
     # Otherwise, the changes will be made inline to the sshd_config file.
     if [ ! -e ${SSH_DIR}/sshd_config.bak ]; then
@@ -302,11 +324,16 @@ secure_sshd() {
       echo "Info: Updating ${SSH_DIR}/sshd_config file with algorithm settings."
       cat /tmp/80-ssh-audit_hardening.conf >>${SSH_DIR}/sshd_config
       set_banner ${SSH_DIR}/sshd_config
+      echo "Contents of file ${SSH_DIR}/sshd_config:"
+      cat ${SSH_DIR}/sshd_config
+      echo "***"
     fi
   fi
 
   # Show the changes to the config.
+  echo "Changes to ${CFILE}:"
   diff ${CFILE}.bak ${CFILE} || :
+  echo "***"
 
   # Create run directory.  Needed for container testing.
   mkdir -p /run/sshd
