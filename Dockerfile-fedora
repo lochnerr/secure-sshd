@@ -1,0 +1,45 @@
+FROM fedora:latest
+
+LABEL MAINTAINER Richard Lochner, Clone Research Corp. <lochner@clone1.com> \
+      org.label-schema.name = "secure-ssh" \
+      org.label-schema.description = "Container for testing secure-ssh fixes" \
+      org.label-schema.vendor = "Clone Research Corp" \
+      org.label-schema.usage = "https://github.com/lochnerr/secure-ssh" \
+      org.label-schema.vcs-url = "https://github.com/lochnerr/secure-ssh.git"
+
+# Manditory packages:
+# openssh-server - What we are testing
+# git - Used to get the ssh-audit scripts
+
+RUN \
+dnf -y install --nodocs \
+ openssh-server \
+ git \
+&& \
+# Get ssh-audit.
+cd /usr/local/bin/ && \
+git clone https://github.com/jtesta/ssh-audit.git && \
+# /usr/local/bin/ssh-audit/ssh-audit.py
+ln -s ssh-audit/ssh-audit.py . && \
+dnf -y clean all && \
+# Empty the yum cache.
+rm -rf /var/cache/dnf && \
+rm -rf /var/cache/yum && \
+true
+
+# Optional means to force rebuild.
+COPY bin/force_rebuild_date /usr/local/bin
+
+# Copy the script files and other artifacts.
+COPY bin/. /usr/local/bin/
+
+# Use systemd init to bring up services.
+CMD [ "/usr/local/bin/secure-ssh-tests" ]
+
+# Set the build labels.
+# Do this last to allow build cacheing during development.
+ARG BUILD_DATE
+ARG VCS_REF
+LABEL org.label-schema.build-date = $BUILD_DATE \
+      org.label-schema.vcs-ref = $VCS_REF
+
