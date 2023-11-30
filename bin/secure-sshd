@@ -233,6 +233,15 @@ secure_sshd() {
 	PubkeyAcceptedAlgorithms ${PubkeyAcceptedAlgorithms}
 	CASignatureAlgorithms ${CASignatureAlgorithms}
 	__EOF__
+      # Add required size to policy, if supported.
+      [[ "$ID_RELATIVE" = "fedora" && "$VERSION_ID" > "36" ]] && required_size="2048"
+      [ -n "$required_size" ] && echo "RequiredRSASize $required_size" >>${SSH_DIR}/sshd-crypto-policy.txt
+      # Fixing up the ssh config is easy. Only need to delete one entry.
+      cp ${SSH_DIR}/sshd-crypto-policy.txt ${SSH_DIR}/ssh-crypto-policy.txt
+      sed -i '/^HostKeyAlgorithms /d' ${SSH_DIR}/ssh-crypto-policy.txt
+      echo "Changes to sshd policy needed for ssh policy:"
+      diff ${SSH_DIR}/sshd-crypto-policy.txt ${SSH_DIR}/ssh-crypto-policy.txt || :
+      echo "---"
     else
       # Format prior to Fedora 32.
       echo "CRYPTO_POLICY='-oCiphers=${Ciphers} -oMACs=${MACs} -oGSSAPIKexAlgorithms=${GSSAPIKexAlgorithms} -oKexAlgorithms=${KexAlgorithms} -oHostKeyAlgorithms=${HostKeyAlgorithms} -oPubkeyAcceptedKeyTypes=${PubkeyAcceptedKeyTypes} -oCASignatureAlgorithms=${CASignatureAlgorithms}'" >${SSH_DIR}/sshd-crypto-policy.txt
