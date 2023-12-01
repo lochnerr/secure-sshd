@@ -1,0 +1,139 @@
+#!/bin/bash
+
+# secure-ssh-tests: Automated tests for ssh-secure.
+
+save_for_compare() {
+
+  [ -e $1 ] &&  \cp $1 /tmp/$(basename $1)
+}
+
+compare_file() {
+
+  if [ -e $1 ]; then
+    if ! diff $1 /tmp/$(basename $1) >/dev/null 2>&1 ; then
+      idempotent="false"
+      if [ -z "$2" ]; then
+        echo "Warning: Unexpected changes to file: ${1}:"
+        diff $1 /tmp/$(basename $1)
+        echo "***"
+      else
+        echo "Warning: Unexpected changes to file: ${1}."
+      fi
+    else
+      echo "Info: File ${1} is unchanged as expected."
+    fi
+  fi
+}
+
+do_idempotent_test() {
+
+  # Verify that no files change after rerunning the ssh securing process.
+  echo "Saving files for idempotent test."
+  idempotent="true"
+  save_for_compare /etc/ssh/sshd-crypto-policy.txt
+  save_for_compare /etc/ssh/ssh-crypto-policy.txt
+  save_for_compare /etc/ssh/sshd_config
+  save_for_compare /etc/ssh/ssh_config
+  save_for_compare /etc/ssh/sshd_config.d/80-ssh-audit_hardening.conf
+  save_for_compare /etc/ssh/ssh_host_ed25519_key
+  save_for_compare /etc/ssh/ssh_host_rsa_key
+  save_for_compare /etc/ssh/ssh_host_ecdsa_key
+  save_for_compare /etc/ssh/moduli
+  save_for_compare /etc/ssh/logon_banner
+
+  # Secure the configuration again to see if files change unexpectedly.
+  /usr/local/bin/secure-sshd
+
+  compare_file /etc/ssh/sshd-crypto-policy.txt
+  compare_file /etc/ssh/ssh-crypto-policy.txt
+  compare_file /etc/ssh/sshd_config
+  compare_file /etc/ssh/ssh_config
+  compare_file /etc/ssh/sshd_config.d/80-ssh-audit_hardening.conf
+  compare_file /etc/ssh/ssh_host_ed25519_key no
+  compare_file /etc/ssh/ssh_host_rsa_key     no
+  compare_file /etc/ssh/ssh_host_ecdsa_key   no
+  compare_file /etc/ssh/moduli               no
+  compare_file /etc/ssh/logon_banner
+  # Verify that the results did not change.
+  if [ "$idempotent" = "true" ]; then 
+    echo "Passed idempotent test!"
+  else
+    echo "Failed idempotent test!"
+    /usr/local/bin/secure-sshd
+  fi
+}
+
+# Secure the configuration.
+/usr/local/bin/secure-sshd
+
+do_idempotent_test
+
+# Now do the other tests.
+source /etc/os-release
+
+# Only do client tests for distros that have system-wide crypto policies.
+[ -e /etc/crypto-policies/back-ends/openssh.config ] && client_tests="true"
+# Client tests fail on Fedora 36 due to python error.
+[ "$ID" = "fedora" ] && [ "$VERSION_ID" \< "37"  ]   && client_tests=
+# No reason for client tests on Amazon.
+[ "$ID" = "amzn" ] && client_tests=
+if [ "$client_tests" = "true" ]; then
+  # Start parallel audit listener.
+  ( ssh-audit.py -c ) &
+  # Get the pid for the listener.
+  audit_pid="$!"
+  sleep 1
+  # Connect to the listener port.
+  ssh -vv -p 2222 localhost &
+  # Wait for the audit process to finish in order to get and save the return code.
+  wait $audit_pid
+  c_rc="$?"
+else
+  c_rc='-'
+fi
+
+# Start the ssh daemon.
+/usr/sbin/sshd -d &
+sleep 1
+# Connect to the ssh server.
+ssh-audit.py localhost
+s_rc="$?"
+
+# Run special policy tests, if desired.
+[ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "22.04"  ] && special="Hardened OpenSSH Server v9.4 (version 2)"
+[ "$ID" = "fedora" ] && [ "$VERSION_ID" > "36"  ]    && special="Hardened OpenSSH Server v9.4 (version 2)"
+[ "$ID" = "amzn" ]   && [ "$VERSION_ID" -ge 2023 ]   && special="Hardened OpenSSH Server v9.4 (version 2)"
+if [ -n "$special" ]; then
+  echo "Running policy: '$special'"
+  /usr/sbin/sshd -d &
+  sleep 1
+  # Connect to the ssh server.
+  ssh-audit.py -P "$special" localhost
+fi
+
+if [ "$c_rc" = "0" ]; then
+  echo "Client tests passed!"
+elif [ "$c_rc" = "-" ]; then
+  echo "Client tests not run."
+else
+  echo "Client tests failed with rc = '$c_rc'."
+fi
+
+if [ "$s_rc" = "0" ]; then
+  echo "Server tests passed!"
+else
+  echo "Server tests failed with rc = '$s_rc'."
+fi
+
+if [ -d /results ]; then
+  openv="$(/usr/sbin/sshd -V 2>/dev/null || :)"
+  # If the -V option isn't supported, get the version the hard way.
+  [ -z "$openv" ] && openv=$(/usr/sbin/sshd --help 2>&1 | grep -i ^OpenSSH)
+  source /etc/os-release
+  echo "${NAME}:${VERSION_ID}	${c_rc}:${s_rc}	OpenSSH Version: ${openv}"
+  echo "${NAME}:${VERSION_ID}	${c_rc}:${s_rc}	OpenSSH Version: ${openv}" >>/results/results
+fi
+
+echo
+echo "Done!"
+
