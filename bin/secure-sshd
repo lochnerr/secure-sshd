@@ -24,7 +24,6 @@ older_sshd() {
 }
 
 . /etc/os-release
-
 ID_RELATIVE="$ID"
 [ "$ID" = "centos" ] && ID_FLAVOR="rhel"
 # Note: All tests run circa June 2021.
@@ -104,9 +103,15 @@ elif [ "$ID_RELATIVE" = "amzn" ]; then
     echo "Error: Unsupported $ID Version ${VERSION_ID}."
     exit 1
   fi
+elif [ "$ID_RELATIVE" = "debian" ]; then
+  # Tested with releases starting with 12.
+  if [ "$VERSION_ID" \< "12" ]; then
+    echo "Error: Unsupported $ID Version ${VERSION_ID}."
+    exit 1
+  fi
+  echo "Debian Version 12 or later."
 else
-  # Try newer configuration on unknown distros.
-  true
+  echo "Info: Trying newest configuration options on $ID Version ${VERSION_ID}."
 fi
 
 set_banner() {
@@ -154,11 +159,11 @@ secure_sshd() {
   fi
 
   # Save the original crypto policies file.
-  if [ ! -e ${CRYPTO}.bak ] && [ -e ${CRYPTO} ]; then
+  if [ -e ${CRYPTO} ] && [ ! -e ${CRYPTO}.bak ]; then
     cp -P $CRYPTO ${CRYPTO}.bak
   fi
   # Save the client crypto policy.
-  if [ ! -e /etc/crypto-policies/back-ends/openssh.config.bak ]; then
+  if [ -e /etc/crypto-policies/back-ends/openssh.config ] && [ ! -e /etc/crypto-policies/back-ends/openssh.config.bak ]; then
     cp -P /etc/crypto-policies/back-ends/openssh.config /etc/crypto-policies/back-ends/openssh.config.bak
   fi
 
