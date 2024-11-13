@@ -1,4 +1,4 @@
-FROM fedora:latest
+FROM debian:latest
 
 LABEL MAINTAINER Richard Lochner, Clone Research Corp. <lochner@clone1.com> \
       org.label-schema.name = "secure-ssh" \
@@ -12,7 +12,8 @@ LABEL MAINTAINER Richard Lochner, Clone Research Corp. <lochner@clone1.com> \
 # git - Used to get the ssh-audit scripts
 
 RUN \
-dnf -y install --nodocs \
+apt-get -y update && \
+DEBIAN_FRONTEND=noninteractive apt-get -y install \
  openssh-server \
  git \
  python3 \
@@ -22,10 +23,6 @@ cd /usr/local/bin/ && \
 git clone https://github.com/jtesta/ssh-audit.git && \
 # /usr/local/bin/ssh-audit/ssh-audit.py
 ln -s ssh-audit/ssh-audit.py . && \
-dnf -y clean all && \
-# Empty the yum cache.
-rm -rf /var/cache/dnf && \
-rm -rf /var/cache/yum && \
 true
 
 # Optional means to force rebuild.
