@@ -100,9 +100,7 @@ ssh-audit.py localhost
 s_rc="$?"
 
 # Run special policy tests, if desired.
-[ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "22.04"  ] && special="Hardened OpenSSH Server v9.4 (version 2)"
-[ "$ID" = "fedora" ] && [ "$VERSION_ID" > "36"  ]    && special="Hardened OpenSSH Server v9.4 (version 2)"
-[ "$ID" = "amzn" ]   && [ "$VERSION_ID" -ge 2023 ]   && special="Hardened OpenSSH Server v9.4 (version 2)"
+[ -n "$SPECIAL" ] && special="$SPECIAL"
 if [ -n "$special" ]; then
   echo "Running policy: '$special'"
   /usr/sbin/sshd -d &
