@@ -23,9 +23,9 @@ older_sshd() {
   HostKeyAlgorithms=
 }
 
+# shellcheck disable=SC1091
 . /etc/os-release
 ID_RELATIVE="$ID"
-[ "$ID" = "centos" ] && ID_FLAVOR="rhel"
 # Note: All tests run circa June 2021.
 if [ "$ID_RELATIVE" = "ubuntu" ]; then
   # Start with values for server 18.04.
@@ -37,11 +37,11 @@ if [ "$ID_RELATIVE" = "ubuntu" ]; then
   GSSAPIKexAlgorithms=
   HostbasedAcceptedAlgorithms=
   PubkeyAcceptedAlgorithms=
-  if [ "$VERSION_ID" \> "20" ]; then
+  if [ "$VERSION_ID" -gt 20 ]; then
     # Add changes from 18 to 20.
     HostKeyAlgorithms='ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com'
   fi
-  if [ "$VERSION_ID" \> "22" ]; then
+  if [ "$VERSION_ID" -gt 22 ]; then
     # Add changes from 20 to 22.
     HostKeyAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512,rsa-sha2-256'
     CASignatureAlgorithms='sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512,rsa-sha2-256'
@@ -50,17 +50,17 @@ if [ "$ID_RELATIVE" = "ubuntu" ]; then
     PubkeyAcceptedAlgorithms='sk-ssh-ed25519-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,ssh-ed25519,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-256'
   fi
   # Only releases starting with 18.04 supported.
-  if [ "$VERSION_ID" \< "18" ]; then
+  if [ "$VERSION_ID" -lt 18 ]; then
     echo "Error: Unsupported $ID Version ${VERSION_ID}."
     exit 1
   fi
 elif [ "$ID_RELATIVE" = "rhel" ]; then
   # Not recently tested with rhel.
-  if [ "$VERSION_ID" \< "7" ]; then
+  if [ "$VERSION_ID" -lt 7 ]; then
     echo "Error: Unsupported $ID Version ${VERSION_ID}."
     exit 1
   fi
-  if [ "$VERSION_ID" \< "8" ]; then
+  if [ "$VERSION_ID" -lt 8 ]; then
     # 7
     older_sshd
     KexAlgorithms='curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group18-sha512,diffie-hellman-group16-sha512,diffie-hellman-group-exchange-sha256'
@@ -70,7 +70,7 @@ elif [ "$ID_RELATIVE" = "rhel" ]; then
   fi
 elif [ "$ID_RELATIVE" = "fedora" ]; then
   # Tested with releases starting with 30.
-  if [ "$VERSION_ID" \< "30" ]; then
+  if [ "$VERSION_ID" -lt 30 ]; then
     echo "Error: Unsupported $ID Version ${VERSION_ID}."
     exit 1
   else
@@ -105,7 +105,7 @@ elif [ "$ID_RELATIVE" = "amzn" ]; then
   fi
 elif [ "$ID_RELATIVE" = "debian" ]; then
   # Tested with releases starting with 12.
-  if [ "$VERSION_ID" \< "12" ]; then
+  if [ "$VERSION_ID" -lt 12 ]; then
     echo "Error: Unsupported $ID Version ${VERSION_ID}."
     exit 1
   fi
@@ -135,7 +135,7 @@ set_banner() {
 	#######################################################################################################################
 
 	EOD
-    sed -i "s:#Banner.*:Banner $SSH_DIR/logon_banner:" $1
+    sed -i "s:#Banner.*:Banner $SSH_DIR/logon_banner:" "$1"
   fi
 }
 
@@ -199,9 +199,9 @@ secure_sshd() {
 
   # Alpine does not install moduli file when runnong in container.
   if [ ! -e ${SSH_DIR}/moduli ]; then
-    if [ -e $(pwd)/test-moduli ]; then
+    if [ -e "$(pwd)"/test-moduli ]; then
       echo "Info: Creating link to test moduli file."
-      ln -sf $(pwd)/test-moduli ${SSH_DIR}/moduli 
+      ln -sf "$(pwd)"/test-moduli ${SSH_DIR}/moduli
     fi
   fi
 
@@ -218,7 +218,7 @@ secure_sshd() {
   awk '$5 >= 3071' ${SSH_DIR}/moduli.bak > ${SSH_DIR}/moduli
   BEG="$(wc -l ${SSH_DIR}/moduli.bak | cut -d ' ' -f 1)"
   END="$(wc -l ${SSH_DIR}/moduli     | cut -d ' ' -f 1)"
-  echo "Info: Removed $(( $BEG - $END )) weak entries."
+  echo "Info: Removed $(( BEG - END )) weak entries."
 
   rm -f /tmp/80-ssh-audit_hardening.conf
   if [ ! -e ${CRYPTO} ]; then
@@ -255,7 +255,7 @@ secure_sshd() {
 	CASignatureAlgorithms ${CASignatureAlgorithms}
 	__EOF__
       # Add required size to policy, if supported.
-      [[ "$ID_RELATIVE" = "fedora" && "$VERSION_ID" -gt 36 ]] && required_size="2048"
+      [ "$ID_RELATIVE" = "fedora" ] && [ "$VERSION_ID" -gt 36 ] && required_size="2048"
       [ -n "$required_size" ] && echo "RequiredRSASize $required_size" >>${SSH_DIR}/sshd-crypto-policy.txt
       # Fixing up the ssh config is easy. Only need to delete one entry.
       cp ${SSH_DIR}/sshd-crypto-policy.txt ${SSH_DIR}/ssh-crypto-policy.txt
@@ -347,18 +347,19 @@ secure_sshd() {
   /usr/sbin/sshd -t || :
 
   # Enable google authenticator, if needed.
-  if $(dirname $0)/enable-authenticator-if-needed ; then
+  if "$(dirname "$0")"/enable-authenticator-if-needed ; then
     echo "Info: Google authenticator enabled!"
   fi
 
   # Determine if running under init system (systemd or openRC).
+  # shellcheck disable=SC2009
   if command -v ps >/dev/null 2>&1 ; then
     INITPROC="$(ps aux | grep 'root.*[ ]1[ ]' || : )"
     [ -z "$INITPROC" ] && INITPROC="$(ps aux | grep '[ ]*[ ]1[ ]*root' || : )"
   fi
   SYSINIT="false"
-  [ -n "$(echo $INITPROC | grep /sbin/init || : )" ] && SYSINIT="true"
-  [ -n "$(echo $INITPROC | grep /lib/systemd/systemd || : )" ] && SYSINIT="true"
+  [ -n "$(echo "$INITPROC" | grep /sbin/init || : )" ] && SYSINIT="true"
+  [ -n "$(echo "$INITPROC" | grep /lib/systemd/systemd || : )" ] && SYSINIT="true"
   if [ "$SYSINIT" = "true" ]; then
     if [ ! -x /sbin/apk ]; then
       # Restart the ssh daemon.
