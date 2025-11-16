@@ -293,6 +293,7 @@ secure_sshd() {
 	#Subsystem sftp	$SFTP
 	HostKey ${SSH_DIR}/ssh_host_rsa_key
 	HostKey ${SSH_DIR}/ssh_host_ed25519_key
+	PerSourceMaxStartups 1
 	#Banner none
 	__EOD__
 
